@@ -283,15 +283,21 @@ async function loadFinnhub(a){
   render(a, old != null ? Math.sign(s.price - old) : 0);
 }
 
-async function loadTD(a){
+async function loadTD(a, sym = 'USD/COP', series = true){
   const s = S[a.id], k = encodeURIComponent(key('k_td'));
-  const q = await getJSON(`https://api.twelvedata.com/quote?symbol=USD/COP&apikey=${k}`, false);
+  const q = await getJSON(`https://api.twelvedata.com/quote?symbol=${encodeURIComponent(sym)}&apikey=${k}`, false);
   if (q.status === 'error' || q.code) throw new Error(q.message || 'error');
   const old = s.price;
   s.price = num(q.close); s.prev = num(q.previous_close); s.pct = num(q.percent_change);
   s.hi = num(q.high); s.lo = num(q.low);
   s.t = (q.timestamp || 0) * 1000 || Date.now(); s.err = null; s.note = '';
-  if (Date.now() - (s.serT || 0) > 30 * 60 * 1000){
+  if (!series){
+    s.samples = s.samples || [];
+    if (s.price != null && s.samples[s.samples.length - 1] !== s.price) s.samples.push(s.price);
+    if (s.samples.length > 300) s.samples.shift();
+    s.closes = s.prev != null ? [s.prev, ...s.samples] : s.samples.slice();
+  }
+  if (series && Date.now() - (s.serT || 0) > 30 * 60 * 1000){
     s.serT = Date.now();
     try{
       const ts = await getJSON(`https://api.twelvedata.com/time_series?symbol=USD/COP&interval=15min&outputsize=96&apikey=${k}`, false);
@@ -309,7 +315,14 @@ async function loadAsset(a){
     try{ return await loadTD(a); }catch(e){ s.err = 'Twelve Data: ' + e.message; render(a); }
   } else if (a.stock && key('k_fh')){
     try{ return await loadFinnhub(a); }
-    catch(e){ s.err = 'Finnhub: clave inválida o sin conexión. Reintentando…'; render(a); return; }
+    catch(e){
+      if (key('k_td')){
+        if (Date.now() - (s.last || 0) < 300000) return;
+        s.last = Date.now();
+        try{ return await loadTD(a, a.sym, false); }catch(e2){ s.err = 'Twelve Data: ' + e2.message; render(a); return; }
+      }
+      s.err = 'Finnhub no devolvió datos para ' + a.code + '. Reintentando…'; render(a); return;
+    }
   }
   return loadYahoo(a);
 }
