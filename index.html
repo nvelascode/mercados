@@ -30,11 +30,11 @@ h1{font-family:'IBM Plex Sans Condensed',sans-serif;font-weight:600;font-size:22
 .btn:hover{background:var(--panel2)}
 
 /* precios */
-.grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin:16px 0 22px}
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:12px;margin:16px 0 22px}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:flex;flex-direction:column;gap:6px;min-width:0;position:relative}
-.card.hero{grid-column:span 3;padding:18px 20px}
-.card.std{grid-column:span 3}
-.card.third{grid-column:span 2}
+.card.hero{grid-column:span 6;padding:18px 20px}
+.card.std{grid-column:span 6}
+.card.third{grid-column:span 3}
 .c-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
 .c-name{font-size:13px;color:var(--mut)}
 .c-sym{font-family:'IBM Plex Sans Condensed',sans-serif;font-weight:600;font-size:14px}
@@ -46,6 +46,10 @@ h1{font-family:'IBM Plex Sans Condensed',sans-serif;font-weight:600;font-size:22
 .hero .spark{height:64px}
 .c-foot{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--mut)}
 .c-extra{font-size:12.5px;color:var(--mut)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.seg button{background:transparent;border:0;padding:2px 10px;font-size:12px;color:var(--mut)}
+.seg button[aria-pressed=true]{background:var(--panel2);color:var(--txt)}
+.seg button:disabled{opacity:.4;cursor:default}
 .flash-up{animation:fu .7s} .flash-dn{animation:fd .7s}
 @keyframes fu{from{background:rgba(53,214,164,.22)}to{background:var(--panel)}}
 @keyframes fd{from{background:rgba(255,107,107,.22)}to{background:var(--panel)}}
@@ -90,12 +94,12 @@ dialog label{display:block;font-size:13px;margin:12px 0 4px}
 dialog input{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 10px;color:var(--txt);font:inherit;font-size:14px}
 .dlg-b{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 @media (max-width:860px){
-  .card.hero,.card.std,.card.third{grid-column:span 6}
-  .card.third,.card.std{grid-column:span 3}
+  .card.hero,.card.std{grid-column:span 12}
+  .card.third{grid-column:span 6}
   .card.hero .c-price{font-size:38px}
 }
 @media (max-width:520px){
-  .card.std,.card.third{grid-column:span 6}
+  .card.hero,.card.std,.card.third{grid-column:span 12}
   .ev{grid-template-columns:48px 1fr auto;grid-template-areas:"t n v" "i n v"}
   .ev .t{grid-area:t}.ev .imp{grid-area:i}.ev .n{grid-area:n}.ev .v{grid-area:v;flex-direction:column;gap:2px}
 }
@@ -145,7 +149,7 @@ dialog input{width:100%;background:var(--bg);border:1px solid var(--line);border
 <p class="note">
   Precios: Binance (BTC, en tiempo real por websocket), Finnhub (VOO, QQQ, VGT) y Twelve Data (USD/COP) con tus claves gratuitas; sin claves intenta Yahoo Finance, que el navegador suele bloquear.
   Calendario: feed público de Forex Factory, horas en Bogotá. La pestaña "Con datos reales" usa TradingView e incluye valor actual, pronóstico y previo.
-  Solo informativo, no es asesoría financiera. Versión 4.
+  Solo informativo, no es asesoría financiera. VIX: CBOE (con ~15 min de retraso). Versión 5.
 </p>
 
 <dialog id="dlg">
@@ -191,12 +195,15 @@ const A = [
   {id:'voo',    sym:'VOO', code:'VOO', name:'Vanguard S&P 500', cls:'third', cur:'USD', stock:true},
   {id:'qqq',    sym:'QQQ', code:'QQQ', name:'Invesco Nasdaq-100', cls:'third', cur:'USD', stock:true},
   {id:'vgt',    sym:'VGT', code:'VGT', name:'Vanguard Tecnología', cls:'third', cur:'USD', stock:true},
+  {id:'vix',    sym:'^VIX', code:'VIX', name:'Índice de volatilidad', cls:'third', cur:'PTS', idx:true, inv:true},
 ];
+let btcCOP = false;
+try{ btcCOP = localStorage.getItem('btc_cur') === 'COP'; }catch(e){}
 const S = {}; A.forEach(a => S[a.id] = {price:null, prev:null, pct:null, closes:[], hi:null, lo:null, t:null, err:null, note:''});
 
 const fmtCOP = v => v.toLocaleString('es-CO',{minimumFractionDigits:2, maximumFractionDigits:2});
 const fmtUSD = v => v.toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2});
-const money = (a,v) => v == null ? '—' : (a.cur === 'COP' ? '$ ' + fmtCOP(v) : '$ ' + fmtUSD(v));
+const money = (a,v) => v == null ? '—' : (a.cur === 'COP' ? '$ ' + fmtCOP(v) : a.cur === 'PTS' ? fmtUSD(v) : '$ ' + fmtUSD(v));
 const hhmm = ts => ts ? new Date(ts).toLocaleTimeString('es-CO',{timeZone:TZ, hour:'2-digit', minute:'2-digit'}) : '—';
 
 function spark(c, up){
@@ -214,27 +221,52 @@ function render(a, flash){
     el.id = 'c-' + a.id; el.className = 'card ' + a.cls;
     $('#grid').appendChild(el);
   }
-  const chg = (s.price != null && s.prev != null) ? s.price - s.prev : null;
-  const pct = s.pct != null ? s.pct : (chg != null && s.prev ? chg / s.prev * 100 : null);
+  const fx = S.usdcop.price;
+  const inCOP = a.id === 'btc' && btcCOP && !!fx;
+  const k = inCOP ? fx : 1;
+  const disp = inCOP ? {...a, cur:'COP'} : a;
+  const fmtN = inCOP ? fmtCOP : fmtUSD;
+  const price = s.price != null ? s.price * k : null;
+  const chg = (s.price != null && s.prev != null) ? (s.price - s.prev) * k : null;
+  const pct = s.pct != null ? s.pct : ((s.price != null && s.prev) ? (s.price - s.prev) / s.prev * 100 : null);
   const dir = pct == null ? 'flat' : pct > 0 ? 'up' : pct < 0 ? 'dn' : 'flat';
+  const col = a.inv ? (dir === 'up' ? 'dn' : dir === 'dn' ? 'up' : 'flat') : dir;
   const sign = pct > 0 ? '+' : '';
-  const chgTxt = pct == null ? '—' : `${sign}${pct.toFixed(2)}%` + (chg != null ? `  (${sign}${chg.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})})` : '');
+  const chgTxt = pct == null ? '—' : `${sign}${pct.toFixed(2)}%` + (chg != null ? `  (${sign}${fmtN(chg)})` : '');
   let extra = '';
-  if (a.id === 'btc' && s.price != null && S.usdcop.price) extra = `<div class="c-extra">≈ $ ${Math.round(s.price * S.usdcop.price).toLocaleString('es-CO')} COP</div>`;
+  if (a.id === 'btc' && s.price != null){
+    if (inCOP) extra = `<div class="c-extra">≈ US$ ${fmtUSD(s.price)}</div>`;
+    else if (fx) extra = `<div class="c-extra">≈ $ ${Math.round(s.price * fx).toLocaleString('es-CO')} COP</div>`;
+  }
   let status = '';
-  if (a.stock) status = usOpen() ? 'Mercado abierto' : 'Cerrado · último cierre';
+  if (a.stock || a.idx) status = usOpen() ? 'Mercado abierto' : 'Cerrado · último cierre';
   else if (a.live) status = S.btc.ws ? 'En vivo' : 'Consulta periódica';
   else status = s.note || '';
+  const head = a.id === 'btc'
+    ? `<span class="c-sym">${esc(a.code)}</span>
+       <span class="seg" role="group" aria-label="Moneda">
+         <button data-btc="USD" aria-pressed="${!inCOP}">USD</button>
+         <button data-btc="COP" aria-pressed="${inCOP}" ${fx ? '' : 'disabled'}>COP</button>
+       </span>`
+    : `<span class="c-sym">${esc(a.code)}</span><span class="c-name">${esc(a.name)}</span>`;
   el.innerHTML = `
-    <div class="c-top"><span class="c-sym">${esc(a.code)}</span><span class="c-name">${esc(a.name)}</span></div>
-    <div class="c-price">${money(a, s.price)}</div>
-    <div class="c-chg ${dir}">${chgTxt}</div>
+    <div class="c-top">${head}</div>
+    <div class="c-price">${money(disp, price)}</div>
+    <div class="c-chg ${col}">${chgTxt}</div>
     ${extra}
-    ${spark(s.closes, dir !== 'dn')}
-    <div class="c-foot"><span>${s.hi != null ? 'Máx ' + money(a, s.hi) + ' · Mín ' + money(a, s.lo) : ''}</span><span>${esc(status)} · ${hhmm(s.t)}</span></div>
+    ${spark(s.closes, col !== 'dn')}
+    <div class="c-foot"><span>${s.hi != null ? 'Máx ' + money(disp, s.hi * k) + ' · Mín ' + money(disp, s.lo * k) : ''}</span><span>${esc(status)} · ${hhmm(s.t)}</span></div>
     ${s.err ? `<div class="err">${esc(s.err)}</div>` : ''}`;
   if (flash && dir !== 'flat'){ el.classList.remove('flash-up','flash-dn'); void el.offsetWidth; el.classList.add(flash > 0 ? 'flash-up' : 'flash-dn'); }
 }
+const btcSwitch = e => {
+  const b = e.target.closest('[data-btc]');
+  if (!b || b.disabled) return;
+  btcCOP = b.dataset.btc === 'COP';
+  try{ localStorage.setItem('btc_cur', b.dataset.btc); }catch(err){}
+  render(A[1]);
+};
+['pointerdown', 'click'].forEach(t => $('#grid').addEventListener(t, btcSwitch));
 A.forEach(a => render(a));
 
 /* ---------- Yahoo ---------- */
@@ -265,7 +297,7 @@ async function loadFXFallback(a){
 }
 
 /* ---------- Finnhub y Twelve Data (con clave gratuita) ---------- */
-try{ if (localStorage.getItem('keys_v') !== '4'){ localStorage.removeItem('k_fh'); localStorage.removeItem('k_td'); localStorage.setItem('keys_v','4'); } }catch(e){}
+try{ if (localStorage.getItem('keys_v') !== '5'){ localStorage.removeItem('k_fh'); localStorage.removeItem('k_td'); localStorage.setItem('keys_v','5'); } }catch(e){}
 const DEFAULT_KEYS = {k_fh:'daur1nhr01qjfq59p4ug', k_td:'eb08f5bf84484f0d8e623d682ecab3dc'};
 const key = n => { try{ const v = (localStorage.getItem(n) || '').trim(); if (v) return v; }catch(e){} return DEFAULT_KEYS[n] || ''; };
 const num = x => (x === null || x === undefined || x === '' || !isFinite(+x)) ? null : +x;
@@ -336,8 +368,28 @@ async function loadTD(a, sym = 'USD/COP', series = true){
   render(a, old != null ? Math.sign(s.price - old) : 0);
 }
 
+async function loadVIX(a){
+  const s = S[a.id];
+  try{
+    const j = await getJSON('https://cdn.cboe.com/api/global/delayed_quotes/quotes/_VIX.json');
+    const d = j.data, old = s.price;
+    const p = num(d.current_price);
+    if (p == null) throw new Error('sin datos');
+    s.price = p; s.prev = num(d.prev_day_close); s.pct = num(d.price_change_percent);
+    s.hi = num(d.high); s.lo = num(d.low); s.t = Date.now(); s.err = null;
+    s.samples = s.samples || [];
+    if (s.samples[s.samples.length - 1] !== p) s.samples.push(p);
+    if (s.samples.length > 300) s.samples.shift();
+    s.closes = s.prev != null ? [s.prev, ...s.samples] : s.samples.slice();
+    render(a, old != null ? Math.sign(p - old) : 0);
+  }catch(e){
+    return loadYahoo(a);
+  }
+}
+
 async function loadAsset(a){
   const s = S[a.id];
+  if (a.id === 'vix') return loadVIX(a);
   if (a.id === 'usdcop' && key('k_td')){
     if (Date.now() - (s.last || 0) < 180000) return;
     s.last = Date.now();
@@ -515,7 +567,7 @@ $('#past').onclick = e => { F.past = !F.past; e.currentTarget.setAttribute('aria
 
 /* ---------- ciclo ---------- */
 async function refreshPrices(){
-  await Promise.all([A[0], A[2], A[3], A[4]].map(loadAsset));
+  await Promise.all([A[0], A[2], A[3], A[4], A[5]].map(loadAsset));
   render(A[1]); // actualiza equivalencia BTC en COP
 }
 async function all(force){
