@@ -145,7 +145,7 @@ dialog input{width:100%;background:var(--bg);border:1px solid var(--line);border
 <p class="note">
   Precios: Binance (BTC, en tiempo real por websocket), Finnhub (VOO, QQQ, VGT) y Twelve Data (USD/COP) con tus claves gratuitas; sin claves intenta Yahoo Finance, que el navegador suele bloquear.
   Calendario: feed público de Forex Factory, horas en Bogotá. La pestaña "Con datos reales" usa TradingView e incluye valor actual, pronóstico y previo.
-  Solo informativo, no es asesoría financiera.
+  Solo informativo, no es asesoría financiera. Versión 4.
 </p>
 
 <dialog id="dlg">
@@ -265,14 +265,29 @@ async function loadFXFallback(a){
 }
 
 /* ---------- Finnhub y Twelve Data (con clave gratuita) ---------- */
+try{ if (localStorage.getItem('keys_v') !== '4'){ localStorage.removeItem('k_fh'); localStorage.removeItem('k_td'); localStorage.setItem('keys_v','4'); } }catch(e){}
 const DEFAULT_KEYS = {k_fh:'daur1nhr01qjfq59p4ug', k_td:'eb08f5bf84484f0d8e623d682ecab3dc'};
 const key = n => { try{ const v = (localStorage.getItem(n) || '').trim(); if (v) return v; }catch(e){} return DEFAULT_KEYS[n] || ''; };
 const num = x => (x === null || x === undefined || x === '' || !isFinite(+x)) ? null : +x;
 
+const FH_CANDS = ['daur1nhr01qjfq59p4ug', 'daur1nhr01qjfq59p4v0'];
+let fhGood = null;
+const stored = n => { try{ return (localStorage.getItem(n) || '').trim(); }catch(e){ return ''; } };
+
 async function loadFinnhub(a){
   const s = S[a.id];
-  const d = await getJSON(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(a.sym)}&token=${encodeURIComponent(key('k_fh'))}`, false);
-  if (!d || !d.c) throw new Error('sin datos');
+  const own = stored('k_fh');
+  let cands = own ? [own] : FH_CANDS.slice();
+  if (fhGood && cands.includes(fhGood)) cands = [fhGood, ...cands.filter(k => k !== fhGood)];
+  let d = null, last = null;
+  for (const k of cands){
+    try{
+      const r = await getJSON(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(a.sym)}&token=${encodeURIComponent(k)}`, false);
+      if (r && r.c){ d = r; fhGood = k; break; }
+      last = new Error('sin datos para este símbolo');
+    }catch(e){ last = e; }
+  }
+  if (!d) throw last || new Error('sin respuesta');
   const old = s.price;
   s.price = d.c; s.prev = d.pc; s.pct = d.dp; s.hi = d.h; s.lo = d.l;
   s.t = (d.t || 0) * 1000 || Date.now(); s.err = null;
@@ -283,10 +298,24 @@ async function loadFinnhub(a){
   render(a, old != null ? Math.sign(s.price - old) : 0);
 }
 
+/* Twelve Data: una consulta a la vez, separadas por 8 s, con pausa si hay límite */
+let tdChain = Promise.resolve(), tdCool = 0;
+function tdGet(url){
+  const run = async () => {
+    const wait = tdCool - Date.now();
+    if (wait > 0) throw new Error('límite por minuto, reintenta en ' + Math.ceil(wait / 1000) + ' s');
+    try{ return await getJSON(url, false); }
+    catch(e){ if (/429/.test(e.message)) tdCool = Date.now() + 65000; throw e; }
+  };
+  const p = tdChain.then(run, run);
+  tdChain = p.catch(() => {}).then(() => new Promise(r => setTimeout(r, 8000)));
+  return p;
+}
+
 async function loadTD(a, sym = 'USD/COP', series = true){
   const s = S[a.id], k = encodeURIComponent(key('k_td'));
-  const q = await getJSON(`https://api.twelvedata.com/quote?symbol=${encodeURIComponent(sym)}&apikey=${k}`, false);
-  if (q.status === 'error' || q.code) throw new Error(q.message || 'error');
+  const q = await tdGet(`https://api.twelvedata.com/quote?symbol=${encodeURIComponent(sym)}&apikey=${k}`);
+  if (q.status === 'error' || q.code){ if (q.code === 429) tdCool = Date.now() + 65000; throw new Error(q.message || 'error'); }
   const old = s.price;
   s.price = num(q.close); s.prev = num(q.previous_close); s.pct = num(q.percent_change);
   s.hi = num(q.high); s.lo = num(q.low);
@@ -300,7 +329,7 @@ async function loadTD(a, sym = 'USD/COP', series = true){
   if (series && Date.now() - (s.serT || 0) > 30 * 60 * 1000){
     s.serT = Date.now();
     try{
-      const ts = await getJSON(`https://api.twelvedata.com/time_series?symbol=USD/COP&interval=15min&outputsize=96&apikey=${k}`, false);
+      const ts = await tdGet(`https://api.twelvedata.com/time_series?symbol=USD/COP&interval=15min&outputsize=96&apikey=${k}`);
       if (ts.values) s.closes = ts.values.map(v => +v.close).reverse();
     }catch(e){}
   }
@@ -317,11 +346,11 @@ async function loadAsset(a){
     try{ return await loadFinnhub(a); }
     catch(e){
       if (key('k_td')){
-        if (Date.now() - (s.last || 0) < 300000) return;
+        if (Date.now() - (s.last || 0) < 600000) return;
         s.last = Date.now();
-        try{ return await loadTD(a, a.sym, false); }catch(e2){ s.err = 'Twelve Data: ' + e2.message; render(a); return; }
+        try{ return await loadTD(a, a.sym, false); }catch(e2){ s.err = 'Finnhub: ' + e.message + ' · Twelve Data: ' + e2.message; render(a); return; }
       }
-      s.err = 'Finnhub no devolvió datos para ' + a.code + '. Reintentando…'; render(a); return;
+      s.err = 'Finnhub (' + a.code + '): ' + e.message + '. Reintentando…'; render(a); return;
     }
   }
   return loadYahoo(a);
