@@ -82,6 +82,13 @@ h2{font-family:'IBM Plex Sans Condensed',sans-serif;font-weight:600;font-size:18
 #tv{min-height:560px}
 .note{color:var(--mut);font-size:12px;margin-top:22px;line-height:1.5}
 
+dialog{background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:12px;padding:20px;max-width:460px;width:calc(100% - 28px)}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+dialog h2{margin-bottom:8px}
+dialog p{color:var(--mut);font-size:13px;line-height:1.5;margin-bottom:12px}
+dialog label{display:block;font-size:13px;margin:12px 0 4px}
+dialog input{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 10px;color:var(--txt);font:inherit;font-size:14px}
+.dlg-b{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 @media (max-width:860px){
   .card.hero,.card.std,.card.third{grid-column:span 6}
   .card.third,.card.std{grid-column:span 3}
@@ -103,6 +110,7 @@ h2{font-family:'IBM Plex Sans Condensed',sans-serif;font-weight:600;font-size:18
     <span class="clock">Bogotá <b id="clkBog">--:--:--</b></span>
     <span class="clock">Nueva York <b id="clkNY">--:--</b></span>
     <span class="pill" id="mkt"><span class="dot"></span><span id="mktTxt">Mercado EE.UU.</span></span>
+    <button class="btn" id="keysBtn">Claves</button>
     <button class="btn" id="refresh">Actualizar</button>
   </div>
 </header>
@@ -135,10 +143,20 @@ h2{font-family:'IBM Plex Sans Condensed',sans-serif;font-weight:600;font-size:18
 </section>
 
 <p class="note">
-  Precios: Binance (BTC, en tiempo real por websocket) y Yahoo Finance (USD/COP, VOO, QQQ, VGT; pueden tener hasta ~15 min de retraso).
+  Precios: Binance (BTC, en tiempo real por websocket), Finnhub (VOO, QQQ, VGT) y Twelve Data (USD/COP) con tus claves gratuitas; sin claves intenta Yahoo Finance, que el navegador suele bloquear.
   Calendario: feed público de Forex Factory, horas en Bogotá. La pestaña "Con datos reales" usa TradingView e incluye valor actual, pronóstico y previo.
   Solo informativo, no es asesoría financiera.
 </p>
+
+<dialog id="dlg">
+  <h2>Claves gratuitas</h2>
+  <p>Los navegadores bloquean Yahoo Finance, así que para precios estables usa estas dos claves gratis. Se guardan solo en este navegador.</p>
+  <label for="kFh">Finnhub (VOO, QQQ, VGT en tiempo real) · <a href="https://finnhub.io/register" target="_blank" rel="noopener">crear clave</a></label>
+  <input id="kFh" autocomplete="off" spellcheck="false" placeholder="Pega tu API key">
+  <label for="kTd">Twelve Data (dólar USD/COP) · <a href="https://twelvedata.com/register" target="_blank" rel="noopener">crear clave</a></label>
+  <input id="kTd" autocomplete="off" spellcheck="false" placeholder="Pega tu API key">
+  <div class="dlg-b"><button class="btn" id="kCancel">Cancelar</button><button class="btn" id="kSave">Guardar</button></div>
+</dialog>
 
 <script>
 'use strict';
@@ -152,6 +170,7 @@ async function getJSON(url, proxy = true){
   if (proxy){
     tries.push('https://corsproxy.io/?url=' + encodeURIComponent(url));
     tries.push('https://api.allorigins.win/raw?url=' + encodeURIComponent(url));
+    tries.push('https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url));
   }
   let last;
   for (const u of tries){
@@ -232,7 +251,7 @@ async function loadYahoo(a){
     render(a, old != null ? Math.sign(s.price - old) : 0);
   }catch(e){
     if (a.id === 'usdcop') return loadFXFallback(a);
-    s.err = 'Sin conexión con Yahoo Finance. Reintentando…'; render(a);
+    s.err = 'Yahoo Finance está bloqueado por el navegador. Toca "Claves" y agrega una clave gratuita.'; render(a);
   }
 }
 async function loadFXFallback(a){
@@ -243,6 +262,56 @@ async function loadFXFallback(a){
     s.t = d.time_last_update_unix * 1000; s.note = 'Referencia diaria'; s.err = null;
   }catch(e){ s.err = 'No se pudo obtener el dólar. Reintentando…'; }
   render(a);
+}
+
+/* ---------- Finnhub y Twelve Data (con clave gratuita) ---------- */
+const DEFAULT_KEYS = {k_fh:'daur1nhr01qjfq59p4ug', k_td:'eb08f5bf84484f0d8e623d682ecab3dc'};
+const key = n => { try{ const v = (localStorage.getItem(n) || '').trim(); if (v) return v; }catch(e){} return DEFAULT_KEYS[n] || ''; };
+const num = x => (x === null || x === undefined || x === '' || !isFinite(+x)) ? null : +x;
+
+async function loadFinnhub(a){
+  const s = S[a.id];
+  const d = await getJSON(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(a.sym)}&token=${encodeURIComponent(key('k_fh'))}`, false);
+  if (!d || !d.c) throw new Error('sin datos');
+  const old = s.price;
+  s.price = d.c; s.prev = d.pc; s.pct = d.dp; s.hi = d.h; s.lo = d.l;
+  s.t = (d.t || 0) * 1000 || Date.now(); s.err = null;
+  s.samples = s.samples || [];
+  if (s.samples[s.samples.length - 1] !== d.c) s.samples.push(d.c);
+  if (s.samples.length > 300) s.samples.shift();
+  s.closes = [d.pc, ...s.samples];
+  render(a, old != null ? Math.sign(s.price - old) : 0);
+}
+
+async function loadTD(a){
+  const s = S[a.id], k = encodeURIComponent(key('k_td'));
+  const q = await getJSON(`https://api.twelvedata.com/quote?symbol=USD/COP&apikey=${k}`, false);
+  if (q.status === 'error' || q.code) throw new Error(q.message || 'error');
+  const old = s.price;
+  s.price = num(q.close); s.prev = num(q.previous_close); s.pct = num(q.percent_change);
+  s.hi = num(q.high); s.lo = num(q.low);
+  s.t = (q.timestamp || 0) * 1000 || Date.now(); s.err = null; s.note = '';
+  if (Date.now() - (s.serT || 0) > 30 * 60 * 1000){
+    s.serT = Date.now();
+    try{
+      const ts = await getJSON(`https://api.twelvedata.com/time_series?symbol=USD/COP&interval=15min&outputsize=96&apikey=${k}`, false);
+      if (ts.values) s.closes = ts.values.map(v => +v.close).reverse();
+    }catch(e){}
+  }
+  render(a, old != null ? Math.sign(s.price - old) : 0);
+}
+
+async function loadAsset(a){
+  const s = S[a.id];
+  if (a.id === 'usdcop' && key('k_td')){
+    if (Date.now() - (s.last || 0) < 180000) return;
+    s.last = Date.now();
+    try{ return await loadTD(a); }catch(e){ s.err = 'Twelve Data: ' + e.message; render(a); }
+  } else if (a.stock && key('k_fh')){
+    try{ return await loadFinnhub(a); }
+    catch(e){ s.err = 'Finnhub: clave inválida o sin conexión. Reintentando…'; render(a); return; }
+  }
+  return loadYahoo(a);
 }
 
 /* ---------- Bitcoin (Binance + websocket) ---------- */
@@ -404,7 +473,7 @@ $('#past').onclick = e => { F.past = !F.past; e.currentTarget.setAttribute('aria
 
 /* ---------- ciclo ---------- */
 async function refreshPrices(){
-  await Promise.all([loadYahoo(A[0]), loadYahoo(A[2]), loadYahoo(A[3]), loadYahoo(A[4])]);
+  await Promise.all([A[0], A[2], A[3], A[4]].map(loadAsset));
   render(A[1]); // actualiza equivalencia BTC en COP
 }
 async function all(force){
@@ -412,7 +481,14 @@ async function all(force){
   if (!S.btc.ws) loadBTC();
   loadCal(force);
 }
-$('#refresh').onclick = () => all(true);
+$('#refresh').onclick = () => { S.usdcop.last = 0; all(true); };
+const dlg = $('#dlg');
+$('#keysBtn').onclick = () => { $('#kFh').value = key('k_fh'); $('#kTd').value = key('k_td'); dlg.showModal(); };
+$('#kCancel').onclick = () => dlg.close();
+$('#kSave').onclick = () => {
+  try{ localStorage.setItem('k_fh', $('#kFh').value.trim()); localStorage.setItem('k_td', $('#kTd').value.trim()); }catch(e){}
+  dlg.close(); S.usdcop.last = 0; S.usdcop.serT = 0; refreshPrices();
+};
 setInterval(tickClock, 1000); tickClock();
 setInterval(() => { if (!document.hidden) refreshPrices(); }, 30000);
 setInterval(() => { if (!document.hidden && !S.btc.ws) loadBTC(); }, 30000);
