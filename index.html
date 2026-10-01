@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mercados</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600&display=swap">
+<style>
+:root{
+  --bg:#0f1720; --panel:#16212d; --panel2:#1b2836; --line:#263648;
+  --txt:#e8eef5; --mut:#8a9bb0; --up:#35d6a4; --dn:#ff6b6b; --amber:#f2b84b; --blue:#6cb6ff;
+  --r:10px;
+}
+*{box-sizing:border-box;margin:0}
+html,body{background:var(--bg);color:var(--txt);font-family:'IBM Plex Sans',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-variant-numeric:tabular-nums;-webkit-text-size-adjust:100%}
+body{padding:max(14px,env(safe-area-inset-top)) 14px max(24px,env(safe-area-inset-bottom));max-width:1180px;margin:0 auto}
+a{color:var(--blue)}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+
+header{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;justify-content:space-between;padding:6px 0 14px;border-bottom:1px solid var(--line)}
+h1{font-family:'IBM Plex Sans Condensed',sans-serif;font-weight:600;font-size:22px;letter-spacing:.2px}
+.hdr-r{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;color:var(--mut);font-size:13px}
+.clock b{color:var(--txt);font-weight:500}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid var(--line);border-radius:99px;font-size:12px;color:var(--mut)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--mut)}
+.pill.open .dot{background:var(--up)} .pill.open{color:var(--txt)}
+.btn{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:13px}
+.btn:hover{background:var(--panel2)}
+
+/* precios */
+.grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin:16px 0 22px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:flex;flex-direction:column;gap:6px;min-width:0;position:relative}
+.card.hero{grid-column:span 3;padding:18px 20px}
+.card.std{grid-column:span 3}
+.card.third{grid-column:span 2}
+.c-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.c-name{font-size:13px;color:var(--mut)}
+.c-sym{font-family:'IBM Plex Sans Condensed',sans-serif;font-weight:600;font-size:14px}
+.c-price{font-size:30px;font-weight:600;letter-spacing:-.4px;line-height:1.1}
+.hero .c-price{font-size:44px}
+.c-chg{font-size:14px;font-weight:500}
+.up{color:var(--up)} .dn{color:var(--dn)} .flat{color:var(--mut)}
+.spark{width:100%;height:44px;display:block;margin-top:2px}
+.hero .spark{height:64px}
+.c-foot{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--mut)}
+.c-extra{font-size:12.5px;color:var(--mut)}
+.flash-up{animation:fu .7s} .flash-dn{animation:fd .7s}
+@keyframes fu{from{background:rgba(53,214,164,.22)}to{background:var(--panel)}}
+@keyframes fd{from{background:rgba(255,107,107,.22)}to{background:var(--panel)}}
+.err{color:var(--amber);font-size:12px}
+
+/* calendario */
+.sec-h{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin:6px 0 10px}
+h2{font-family:'IBM Plex Sans Condensed',sans-serif;font-weight:600;font-size:18px}
+.tabs{display:flex;gap:6px}
+.tab{padding:6px 12px;border:1px solid var(--line);border-radius:8px;background:transparent;font-size:13px;color:var(--mut)}
+.tab[aria-selected=true]{background:var(--panel2);color:var(--txt);border-color:#35506b}
+.filters{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--line);border-radius:99px;background:transparent;font-size:12.5px;color:var(--mut)}
+.chip[aria-pressed=true]{color:var(--txt);background:var(--panel2);border-color:#35506b}
+.next{background:linear-gradient(0deg,var(--panel),var(--panel));border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:var(--r);padding:10px 14px;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:6px 14px;justify-content:space-between;align-items:center;font-size:14px}
+.next .cd{font-size:20px;font-weight:600;color:var(--amber)}
+.day{margin-top:14px}
+.day-h{font-weight:500;font-size:13px;color:var(--mut);padding:0 2px 6px;text-transform:capitalize}
+.day-h.today{color:var(--amber)}
+.ev{display:grid;grid-template-columns:54px 62px 1fr auto;gap:10px;align-items:center;padding:10px 12px;background:var(--panel);border:1px solid var(--line);border-top:none}
+.ev:first-of-type{border-top:1px solid var(--line);border-radius:var(--r) var(--r) 0 0}
+.ev:last-child{border-radius:0 0 var(--r) var(--r)}
+.ev:only-of-type{border-radius:var(--r)}
+.ev.past{opacity:.5}
+.ev .t{font-size:14px;font-weight:500}
+.imp{display:flex;gap:3px}
+.imp i{width:6px;height:14px;border-radius:2px;background:#33455a}
+.imp.h i{background:var(--dn)} .imp.m i:nth-child(-n+2){background:var(--amber)} .imp.l i:nth-child(1){background:#c9b458}
+.ev .n{font-size:14px;min-width:0}
+.ev .n small{display:block;color:var(--mut);font-size:11.5px;margin-top:1px}
+.ev .v{display:flex;gap:14px;font-size:12.5px;color:var(--mut);text-align:right}
+.ev .v b{display:block;color:var(--txt);font-weight:500;font-size:13px}
+.empty{padding:22px;border:1px dashed var(--line);border-radius:var(--r);color:var(--mut);font-size:14px;line-height:1.5}
+#tv{min-height:560px}
+.note{color:var(--mut);font-size:12px;margin-top:22px;line-height:1.5}
+
+@media (max-width:860px){
+  .card.hero,.card.std,.card.third{grid-column:span 6}
+  .card.third,.card.std{grid-column:span 3}
+  .card.hero .c-price{font-size:38px}
+}
+@media (max-width:520px){
+  .card.std,.card.third{grid-column:span 6}
+  .ev{grid-template-columns:48px 1fr auto;grid-template-areas:"t n v" "i n v"}
+  .ev .t{grid-area:t}.ev .imp{grid-area:i}.ev .n{grid-area:n}.ev .v{grid-area:v;flex-direction:column;gap:2px}
+}
+@media (prefers-reduced-motion:reduce){.flash-up,.flash-dn{animation:none}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Mercados</h1>
+  <div class="hdr-r">
+    <span class="clock">Bogotá <b id="clkBog">--:--:--</b></span>
+    <span class="clock">Nueva York <b id="clkNY">--:--</b></span>
+    <span class="pill" id="mkt"><span class="dot"></span><span id="mktTxt">Mercado EE.UU.</span></span>
+    <button class="btn" id="refresh">Actualizar</button>
+  </div>
+</header>
+
+<section class="grid" id="grid" aria-live="polite"></section>
+
+<section>
+  <div class="sec-h">
+    <h2>Calendario económico · EE.UU.</h2>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" id="tabA">Lista</button>
+      <button class="tab" role="tab" aria-selected="false" id="tabB">Con datos reales</button>
+    </div>
+  </div>
+
+  <div id="paneA">
+    <div class="filters" style="margin-bottom:10px">
+      <button class="chip" data-imp="High" aria-pressed="true"><span class="imp h"><i></i><i></i><i></i></span> Alto</button>
+      <button class="chip" data-imp="Medium" aria-pressed="true"><span class="imp m"><i></i><i></i><i></i></span> Medio</button>
+      <button class="chip" data-imp="Low" aria-pressed="false"><span class="imp l"><i></i><i></i><i></i></span> Bajo</button>
+      <button class="chip" id="past" aria-pressed="false">Ver eventos pasados</button>
+    </div>
+    <div id="next"></div>
+    <div id="cal"></div>
+  </div>
+
+  <div id="paneB" hidden>
+    <div id="tv"></div>
+  </div>
+</section>
+
+<p class="note">
+  Precios: Binance (BTC, en tiempo real por websocket) y Yahoo Finance (USD/COP, VOO, QQQ, VGT; pueden tener hasta ~15 min de retraso).
+  Calendario: feed público de Forex Factory, horas en Bogotá. La pestaña "Con datos reales" usa TradingView e incluye valor actual, pronóstico y previo.
+  Solo informativo, no es asesoría financiera.
+</p>
+
+<script>
+'use strict';
+const TZ = 'America/Bogota';
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ---------- red ---------- */
+async function getJSON(url, proxy = true){
+  const tries = [url];
+  if (proxy){
+    tries.push('https://corsproxy.io/?url=' + encodeURIComponent(url));
+    tries.push('https://api.allorigins.win/raw?url=' + encodeURIComponent(url));
+  }
+  let last;
+  for (const u of tries){
+    try{
+      const c = new AbortController(); const to = setTimeout(() => c.abort(), 9000);
+      const r = await fetch(u, {signal:c.signal, cache:'no-store'}); clearTimeout(to);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return await r.json();
+    }catch(e){ last = e; }
+  }
+  throw last;
+}
+
+/* ---------- activos ---------- */
+const A = [
+  {id:'usdcop', sym:'COP=X', code:'USD/COP', name:'Dólar en pesos colombianos', cls:'hero', cur:'COP'},
+  {id:'btc',    sym:'BTC-USD', code:'BTC', name:'Bitcoin', cls:'std', cur:'USD', live:true},
+  {id:'voo',    sym:'VOO', code:'VOO', name:'Vanguard S&P 500', cls:'third', cur:'USD', stock:true},
+  {id:'qqq',    sym:'QQQ', code:'QQQ', name:'Invesco Nasdaq-100', cls:'third', cur:'USD', stock:true},
+  {id:'vgt',    sym:'VGT', code:'VGT', name:'Vanguard Tecnología', cls:'third', cur:'USD', stock:true},
+];
+const S = {}; A.forEach(a => S[a.id] = {price:null, prev:null, pct:null, closes:[], hi:null, lo:null, t:null, err:null, note:''});
+
+const fmtCOP = v => v.toLocaleString('es-CO',{minimumFractionDigits:2, maximumFractionDigits:2});
+const fmtUSD = v => v.toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2});
+const money = (a,v) => v == null ? '—' : (a.cur === 'COP' ? '$ ' + fmtCOP(v) : '$ ' + fmtUSD(v));
+const hhmm = ts => ts ? new Date(ts).toLocaleTimeString('es-CO',{timeZone:TZ, hour:'2-digit', minute:'2-digit'}) : '—';
+
+function spark(c, up){
+  if (!c || c.length < 2) return '<div class="spark"></div>';
+  const mn = Math.min(...c), mx = Math.max(...c), rg = mx - mn || 1;
+  const pts = c.map((v,i) => `${(i/(c.length-1)*100).toFixed(2)},${(30 - (v-mn)/rg*28).toFixed(2)}`).join(' ');
+  return `<svg class="spark" viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="${up ? 'var(--up)' : 'var(--dn)'}" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>`;
+}
+
+function render(a, flash){
+  const s = S[a.id];
+  let el = document.getElementById('c-' + a.id);
+  if (!el){
+    el = document.createElement('article');
+    el.id = 'c-' + a.id; el.className = 'card ' + a.cls;
+    $('#grid').appendChild(el);
+  }
+  const chg = (s.price != null && s.prev != null) ? s.price - s.prev : null;
+  const pct = s.pct != null ? s.pct : (chg != null && s.prev ? chg / s.prev * 100 : null);
+  const dir = pct == null ? 'flat' : pct > 0 ? 'up' : pct < 0 ? 'dn' : 'flat';
+  const sign = pct > 0 ? '+' : '';
+  const chgTxt = pct == null ? '—' : `${sign}${pct.toFixed(2)}%` + (chg != null ? `  (${sign}${chg.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})})` : '');
+  let extra = '';
+  if (a.id === 'btc' && s.price != null && S.usdcop.price) extra = `<div class="c-extra">≈ $ ${Math.round(s.price * S.usdcop.price).toLocaleString('es-CO')} COP</div>`;
+  let status = '';
+  if (a.stock) status = usOpen() ? 'Mercado abierto' : 'Cerrado · último cierre';
+  else if (a.live) status = S.btc.ws ? 'En vivo' : 'Consulta periódica';
+  else status = s.note || '';
+  el.innerHTML = `
+    <div class="c-top"><span class="c-sym">${esc(a.code)}</span><span class="c-name">${esc(a.name)}</span></div>
+    <div class="c-price">${money(a, s.price)}</div>
+    <div class="c-chg ${dir}">${chgTxt}</div>
+    ${extra}
+    ${spark(s.closes, dir !== 'dn')}
+    <div class="c-foot"><span>${s.hi != null ? 'Máx ' + money(a, s.hi) + ' · Mín ' + money(a, s.lo) : ''}</span><span>${esc(status)} · ${hhmm(s.t)}</span></div>
+    ${s.err ? `<div class="err">${esc(s.err)}</div>` : ''}`;
+  if (flash && dir !== 'flat'){ el.classList.remove('flash-up','flash-dn'); void el.offsetWidth; el.classList.add(flash > 0 ? 'flash-up' : 'flash-dn'); }
+}
+A.forEach(a => render(a));
+
+/* ---------- Yahoo ---------- */
+async function loadYahoo(a){
+  const s = S[a.id];
+  try{
+    const d = await getJSON(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(a.sym)}?interval=5m&range=1d`);
+    const r = d.chart.result[0], m = r.meta;
+    const closes = (r.indicators.quote[0].close || []).filter(x => x != null);
+    const old = s.price;
+    s.price = m.regularMarketPrice; s.prev = m.chartPreviousClose ?? m.previousClose; s.pct = null;
+    s.closes = closes; s.hi = m.regularMarketDayHigh ?? null; s.lo = m.regularMarketDayLow ?? null;
+    s.t = (m.regularMarketTime || 0) * 1000 || Date.now(); s.err = null;
+    render(a, old != null ? Math.sign(s.price - old) : 0);
+  }catch(e){
+    if (a.id === 'usdcop') return loadFXFallback(a);
+    s.err = 'Sin conexión con Yahoo Finance. Reintentando…'; render(a);
+  }
+}
+async function loadFXFallback(a){
+  const s = S[a.id];
+  try{
+    const d = await getJSON('https://open.er-api.com/v6/latest/USD', false);
+    s.price = d.rates.COP; s.prev = null; s.pct = null; s.closes = []; s.hi = s.lo = null;
+    s.t = d.time_last_update_unix * 1000; s.note = 'Referencia diaria'; s.err = null;
+  }catch(e){ s.err = 'No se pudo obtener el dólar. Reintentando…'; }
+  render(a);
+}
+
+/* ---------- Bitcoin (Binance + websocket) ---------- */
+async function loadBTC(){
+  const a = A[1], s = S.btc;
+  try{
+    const [t, k] = await Promise.all([
+      getJSON('https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT', false),
+      getJSON('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=15m&limit=96', false)
+    ]);
+    s.price = +t.lastPrice; s.pct = +t.priceChangePercent; s.prev = s.price - +t.priceChange;
+    s.hi = +t.highPrice; s.lo = +t.lowPrice; s.closes = k.map(x => +x[4]); s.t = Date.now(); s.err = null;
+    render(a);
+    startWS();
+  }catch(e){
+    s.ws = false;
+    await loadYahoo({...a, id:'btc'});
+  }
+}
+let ws;
+function startWS(){
+  if (ws && ws.readyState <= 1) return;
+  try{ ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@ticker'); }catch(e){ return; }
+  ws.onopen = () => { S.btc.ws = true; };
+  ws.onmessage = ev => {
+    const d = JSON.parse(ev.data), s = S.btc, old = s.price;
+    s.price = +d.c; s.pct = +d.P; s.prev = +d.c - +d.p; s.hi = +d.h; s.lo = +d.l; s.t = d.E || Date.now(); s.err = null;
+    if (s.closes.length) s.closes[s.closes.length - 1] = s.price;
+    const now = Date.now();
+    if (now - (s.lastR || 0) > 900){ s.lastR = now; render(A[1], old != null ? Math.sign(s.price - old) : 0); }
+  };
+  ws.onclose = () => { S.btc.ws = false; setTimeout(startWS, 5000); };
+  ws.onerror = () => ws.close();
+}
+
+/* ---------- mercado EE.UU. ---------- */
+function nyParts(){
+  const p = new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York', weekday:'short', hour:'numeric', minute:'numeric', hour12:false}).formatToParts(new Date());
+  const g = t => p.find(x => x.type === t).value;
+  return {wd:g('weekday'), min:(+g('hour') % 24) * 60 + +g('minute')};
+}
+function usOpen(){ const n = nyParts(); return !['Sat','Sun'].includes(n.wd) && n.min >= 570 && n.min < 960; }
+function tickClock(){
+  const now = new Date();
+  $('#clkBog').textContent = now.toLocaleTimeString('es-CO',{timeZone:TZ, hour12:false});
+  $('#clkNY').textContent = now.toLocaleTimeString('es-CO',{timeZone:'America/New_York', hour:'2-digit', minute:'2-digit', hour12:false});
+  const o = usOpen();
+  $('#mkt').classList.toggle('open', o);
+  $('#mktTxt').textContent = o ? 'Mercado EE.UU. abierto' : 'Mercado EE.UU. cerrado';
+  updateNext();
+}
+
+/* ---------- calendario ---------- */
+const TR = [
+  [/ADP Non-Farm/i,'Empleo privado ADP'],[/Non-Farm Employment Change/i,'Nóminas no agrícolas (NFP)'],
+  [/Unemployment Rate/i,'Tasa de desempleo'],[/Unemployment Claims/i,'Solicitudes de subsidio por desempleo'],
+  [/Average Hourly Earnings/i,'Salario promedio por hora'],[/Core CPI/i,'IPC subyacente'],[/\bCPI\b/i,'IPC (inflación)'],
+  [/Core PCE/i,'PCE subyacente'],[/PCE Price/i,'Precios PCE'],[/Core PPI/i,'IPP subyacente'],[/\bPPI\b/i,'IPP (precios al productor)'],
+  [/Federal Funds Rate/i,'Decisión de tasas de la Fed'],[/FOMC Statement/i,'Comunicado del FOMC'],
+  [/FOMC Meeting Minutes/i,'Minutas del FOMC'],[/FOMC Press Conference/i,'Rueda de prensa del FOMC'],[/FOMC Economic Projections/i,'Proyecciones económicas FOMC'],
+  [/Advance GDP|Prelim GDP|Final GDP|\bGDP\b/i,'PIB'],[/Core Retail Sales/i,'Ventas minoristas subyacentes'],[/Retail Sales/i,'Ventas minoristas'],
+  [/ISM Manufacturing/i,'ISM manufacturero'],[/ISM Services/i,'ISM de servicios'],[/JOLTS/i,'Vacantes JOLTS'],
+  [/Consumer Confidence/i,'Confianza del consumidor'],[/UoM Consumer Sentiment/i,'Sentimiento U. de Michigan'],
+  [/Durable Goods/i,'Bienes duraderos'],[/Crude Oil Inventories/i,'Inventarios de crudo'],[/Trade Balance/i,'Balanza comercial'],
+  [/Housing Starts/i,'Inicios de vivienda'],[/Existing Home Sales/i,'Venta de viviendas existentes'],[/New Home Sales/i,'Venta de viviendas nuevas'],
+  [/Flash Manufacturing PMI/i,'PMI manufacturero (preliminar)'],[/Flash Services PMI/i,'PMI de servicios (preliminar)'],
+  [/Treasury Currency Report/i,'Informe cambiario del Tesoro'],[/Bank Holiday/i,'Feriado bancario'],[/Speaks/i,'interviene'],[/Testifies/i,'testifica']
+];
+function tr(t){ for (const [re, es] of TR) if (re.test(t)) return t.replace(/^(.*)$/, m => m.replace(re, es)); return t; }
+
+let EV = [];
+const F = {High:true, Medium:true, Low:false, past:false};
+const dayFmt = new Intl.DateTimeFormat('es-CO',{timeZone:TZ, weekday:'long', day:'numeric', month:'long'});
+const dayKey = ts => new Intl.DateTimeFormat('en-CA',{timeZone:TZ}).format(ts);
+const timeFmt = ts => new Date(ts).toLocaleTimeString('es-CO',{timeZone:TZ, hour:'2-digit', minute:'2-digit', hour12:false});
+
+async function loadCal(force){
+  const KEY = 'mercados_cal_v1';
+  let data = null;
+  try{
+    const c = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if (c && !force && Date.now() - c.t < 15 * 60 * 1000) data = c.d;
+  }catch(e){}
+  if (!data){
+    const urls = ['https://nfs.faireconomy.media/ff_calendar_thisweek.json','https://nfs.faireconomy.media/ff_calendar_nextweek.json'];
+    const res = await Promise.allSettled(urls.map(u => getJSON(u)));
+    data = res.filter(r => r.status === 'fulfilled' && Array.isArray(r.value)).flatMap(r => r.value);
+    if (data.length) try{ localStorage.setItem(KEY, JSON.stringify({t:Date.now(), d:data})); }catch(e){}
+    else try{ const c = JSON.parse(localStorage.getItem(KEY) || 'null'); if (c) data = c.d; }catch(e){}
+  }
+  EV = (data || []).filter(e => e.country === 'USD').map(e => ({...e, ts:new Date(e.date).getTime()})).sort((a,b) => a.ts - b.ts);
+  drawCal();
+}
+
+function drawCal(){
+  const box = $('#cal');
+  if (!EV.length){
+    box.innerHTML = '<div class="empty">No se pudo cargar el calendario. Abre la pestaña "Con datos reales" para ver los eventos desde TradingView, o toca Actualizar en unos minutos (el feed limita las consultas).</div>';
+    return;
+  }
+  const now = Date.now(), today = dayKey(now);
+  const list = EV.filter(e => F[e.impact] && (F.past || dayKey(e.ts) >= today));
+  if (!list.length){ box.innerHTML = '<div class="empty">No hay eventos con los filtros actuales.</div>'; return; }
+  const groups = new Map();
+  list.forEach(e => { const k = dayKey(e.ts); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(e); });
+  let html = '';
+  for (const [k, evs] of groups){
+    html += `<div class="day"><h3 class="day-h ${k === today ? 'today' : ''}">${k === today ? 'Hoy · ' : ''}${esc(dayFmt.format(evs[0].ts))}</h3>`;
+    html += evs.map(e => {
+      const cls = e.impact === 'High' ? 'h' : e.impact === 'Medium' ? 'm' : 'l';
+      const es = tr(e.title);
+      return `<div class="ev ${e.ts < now ? 'past' : ''}">
+        <div class="t">${timeFmt(e.ts)}</div>
+        <div class="imp ${cls}" title="Impacto ${esc(e.impact)}"><i></i><i></i><i></i></div>
+        <div class="n">${esc(es)}${es !== e.title ? `<small>${esc(e.title)}</small>` : ''}</div>
+        <div class="v"><span>Pronóstico<b>${esc(e.forecast || '—')}</b></span><span>Previo<b>${esc(e.previous || '—')}</b></span></div>
+      </div>`;
+    }).join('');
+    html += '</div>';
+  }
+  box.innerHTML = html;
+}
+
+function updateNext(){
+  const now = Date.now();
+  const n = EV.find(e => e.ts > now && e.impact === 'High') || EV.find(e => e.ts > now && e.impact === 'Medium');
+  const box = $('#next');
+  if (!n){ box.innerHTML = ''; return; }
+  let s = Math.max(0, Math.floor((n.ts - now) / 1000));
+  const d = Math.floor(s / 86400); s %= 86400;
+  const h = Math.floor(s / 3600); s %= 3600; const m = Math.floor(s / 60); s %= 60;
+  const cd = (d ? d + 'd ' : '') + [h, m, s].map(x => String(x).padStart(2,'0')).join(':');
+  box.innerHTML = `<div class="next"><span>Próximo evento clave: <b>${esc(tr(n.title))}</b> · ${esc(dayFmt.format(n.ts))}, ${timeFmt(n.ts)}</span><span class="cd">${cd}</span></div>`;
+}
+
+/* ---------- TradingView ---------- */
+let tvDone = false;
+function loadTV(){
+  if (tvDone) return; tvDone = true;
+  const box = $('#tv');
+  const w = document.createElement('div'); w.className = 'tradingview-widget-container';
+  const inner = document.createElement('div'); inner.className = 'tradingview-widget-container__widget'; w.appendChild(inner);
+  const sc = document.createElement('script');
+  sc.src = 'https://s3.tradingview.com/external-embedding/embed-widget-events.js'; sc.async = true;
+  sc.text = JSON.stringify({colorTheme:'dark', isTransparent:true, width:'100%', height:'600', locale:'es', importanceFilter:'0,1', countryFilter:'us'});
+  w.appendChild(sc); box.appendChild(w);
+}
+
+/* ---------- eventos UI ---------- */
+function setTab(b){
+  $('#tabA').setAttribute('aria-selected', !b); $('#tabB').setAttribute('aria-selected', b);
+  $('#paneA').hidden = b; $('#paneB').hidden = !b; if (b) loadTV();
+}
+$('#tabA').onclick = () => setTab(false); $('#tabB').onclick = () => setTab(true);
+document.querySelectorAll('.chip[data-imp]').forEach(c => c.onclick = () => {
+  const k = c.dataset.imp; F[k] = !F[k]; c.setAttribute('aria-pressed', F[k]); drawCal();
+});
+$('#past').onclick = e => { F.past = !F.past; e.currentTarget.setAttribute('aria-pressed', F.past); drawCal(); };
+
+/* ---------- ciclo ---------- */
+async function refreshPrices(){
+  await Promise.all([loadYahoo(A[0]), loadYahoo(A[2]), loadYahoo(A[3]), loadYahoo(A[4])]);
+  render(A[1]); // actualiza equivalencia BTC en COP
+}
+async function all(force){
+  refreshPrices();
+  if (!S.btc.ws) loadBTC();
+  loadCal(force);
+}
+$('#refresh').onclick = () => all(true);
+setInterval(tickClock, 1000); tickClock();
+setInterval(() => { if (!document.hidden) refreshPrices(); }, 30000);
+setInterval(() => { if (!document.hidden && !S.btc.ws) loadBTC(); }, 30000);
+setInterval(() => loadCal(false), 15 * 60 * 1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) all(false); });
+loadBTC(); refreshPrices(); loadCal(false);
+</script>
+</body>
+</html>
